@@ -8,28 +8,18 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Piano Notes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#14141c">
+<meta name="theme-color" content="#000000">
 <link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAIAAADdvvtQAAADG0lEQVR4nO3dMU4bURRA0SGCIh3FFMACqCNRp0uTMk02kA1kZ2yAFUTyBtJGgoYiG4iUAgkQoAj7jjHkn1Nanu/R+Or9ZuzZm+ejCTb1btcnwNsmIBIBkQiIREAkAiIREImASAREIiASAZEIiERAJAIiERCJgEgERCIgEgGR7O/6BF6pT19+Pn7x4vz05c/kldtzU/19T3bzmJJu2cLuPLOetd753zOBpikEYRSZQGmcGEWjB9QLGLyh0QMiGjqgpYbHyENo3ICW/daHbWjcgFiEgEgGDWgbO86Yu9igAbEUAZEIiERAJAIiERDJoAFt4zaMMW/tGDQgliIgknEDWnbHGXP/mkYOaFruWx+2nmnwgOhGD6gPj5HHzySgqRUweD2Tn/Xct9b9GNK5YQLdeX4T6rllAj3Nb+OfSUAktjASAZEIiERAJAIiERCJgEgERCIgEgGRCIhEQCQCIhEQiYBIBEQiIBIBkQiIREAkiz2xcJ4PNz726upq3UOOj4/jsp+//lr3Q//h4vy0XIFpRxfhsYOD92u9f8lHXq5Wq80OPDk52cZnbbBstPEVmN7sRbCFkQiIREAkAiIREImASAREIiASAZEIiERAJAIiERCJgEgERCIgEgGRCIhEQCQCIhEQiYBIBEQiIBIBkQiIREAkAiIREImASAREIiASAZEIiERAJAIiERCJgEgERCIgEgGRCIhEQCQCIhEQiYBIBEQiIBIBkQiIREAkAiIREImASAREIiASAZHs7/oEpmmaLi8vH7xydnZ2ff17ng9Xq9WWlv32/c/GK2/DC1+EjRd8wAQiERCJgEgERCIgEgGRCIhEQCQCIhEQiYBIBEQiIBIBkQiIREAkAiIREImASAREIiASAZEIiERAJAIiERCJgEgERCIgEgGRCIhEQCQCIhEQiYBIBEQiIBIBkezN89EiC83z4SLr3Lr5h9tl17y/7IePPxZc9uL8dKtnu/iySy21WECMyRZGIiASAZEIiERAJAIiERCJgEgERCIgEgGRCIhEQCQCIhEQiYBIBEQiIBIBkQiIREAkAiL5C5fcgU5eyEBRAAAAAElFTkSuQmCC">
-<link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjoiUGlhbm8gTm90ZSBEZXRlY3RvciIsInNob3J0X25hbWUiOiJQaWFubyBOb3RlcyIsInN0YXJ0X3VybCI6Ii4iLCJzY29wZSI6Ii4iLCJkaXNwbGF5Ijoic3RhbmRhbG9uZSIsImJhY2tncm91bmRfY29sb3IiOiIjMTQxNDFjIiwidGhlbWVfY29sb3IiOiIjMTQxNDFjIn0=">
+<link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjoiUGlhbm8gTm90ZSBEZXRlY3RvciIsInNob3J0X25hbWUiOiJQaWFubyBOb3RlcyIsInN0YXJ0X3VybCI6Ii4iLCJzY29wZSI6Ii4iLCJkaXNwbGF5Ijoic3RhbmRhbG9uZSIsImJhY2tncm91bmRfY29sb3IiOiIjMDAwMDAwIiwidGhlbWVfY29sb3IiOiIjMDAwMDAwIn0=">
 <style>
 :root{
-  --bg:#f5f5f7; --fg:#141418; --muted:#6b6b76; --accent:#5865f2;
-  --key-white:#ffffff; --key-black:#141418; --key-border:rgba(0,0,0,.28); --panel:#ffffff;
+  --bg:#000000; --fg:#f2f2f5; --muted:#9a9aa5; --accent:#7c86ff;
+  --key-white:#e8e8ee; --key-black:#0a0a10; --key-border:rgba(255,255,255,.25); --panel:#141418;
   box-sizing:border-box;
   padding-top:env(safe-area-inset-top,0px);
   padding-bottom:env(safe-area-inset-bottom,0px);
 }
 *{box-sizing:inherit}
-@media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){
-    --bg:#14141c; --fg:#f2f2f5; --muted:#9a9aa5; --accent:#7c86ff;
-    --key-white:#e8e8ee; --key-black:#0a0a10; --key-border:rgba(255,255,255,.25); --panel:#1d1d27;
-  }
-}
-:root[data-theme="dark"]{
-  --bg:#14141c; --fg:#f2f2f5; --muted:#9a9aa5; --accent:#7c86ff;
-  --key-white:#e8e8ee; --key-black:#0a0a10; --key-border:rgba(255,255,255,.25); --panel:#1d1d27;
-}
 html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
 body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-tap-highlight-color:transparent}
 #app{display:flex;flex-direction:column;align-items:center;min-height:100%;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));gap:12px}
@@ -55,7 +45,7 @@ h1{font-size:17px;font-weight:600;margin:6px 0 0;letter-spacing:.2px}
 .pianoInner{position:relative}
 .roll{position:relative;height:0;overflow:hidden;transition:height .25s ease}
 body.mode-record .roll{height:190px}
-.fnote{position:absolute;background:var(--accent);border-radius:3px;opacity:.85}
+.fnote{position:absolute;border-radius:4px;opacity:.9}
 .keyboard{position:relative;height:150px}
 .wkey{position:absolute;top:0;bottom:0;background:var(--key-white);border:1px solid var(--key-border);border-radius:0 0 5px 5px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:6px;transition:background .06s ease}
 .wkey span{font-size:10px;color:var(--muted)}
@@ -360,6 +350,11 @@ function scrollToKey(midi){
   if (el) el.scrollIntoView({ behavior:"smooth", inline:"center", block:"nearest" });
 }
 buildKeyboard();
+function centerKeyboard(){
+  const totalWidth = WHITE_W * whiteMidis.length;
+  pianoScroll.scrollLeft = Math.max(0, (totalWidth - pianoScroll.clientWidth) / 2);
+}
+centerKeyboard();
 
 // ---------- Shared live pipeline ----------
 const audioManager = new AudioManager();
@@ -481,6 +476,7 @@ playbackAudio.onended = () => { playBtn.textContent = "\u25B6 Play"; setActiveKe
 function stopPlayback(){ playbackAudio.pause(); playbackAudio.currentTime = 0; playBtn.textContent = "\u25B6 Play"; }
 
 const PX_PER_SEC = 90;
+const NOTE_COLORS = ["#ff5c7a","#ff8a5c","#ffcf5c","#c8e05c","#6be07a","#4be0c2","#4bb8e0","#4b8fe0","#6b6bff","#a45cff","#e05cd9","#e05c8f"];
 let rafActive = false;
 function startRenderLoop(){ if (!rafActive){ rafActive = true; requestAnimationFrame(renderFrame); } }
 function renderFrame(){
@@ -490,15 +486,18 @@ function renderFrame(){
   const active = [];
   noteSegments.forEach(seg => {
     const bottom = hitLine + (t - seg.start) * PX_PER_SEC;
-    const height = Math.max(6, (seg.end - seg.start) * PX_PER_SEC);
+    const height = Math.max(18, (seg.end - seg.start) * PX_PER_SEC);
     const top = bottom - height;
     let el = segEls.get(seg);
     if (bottom < -40 || top > hitLine + 40){ if (el) el.style.display = "none"; return; }
     if (!el){
       el = document.createElement("div"); el.className = "fnote";
-      const kx = keyX[seg.midi]; el.style.left = kx.left+"px"; el.style.width = kx.width+"px";
+      const kx = keyX[seg.midi]; const inset = Math.min(3, kx.width*0.12);
+      el.style.left = (kx.left+inset)+"px"; el.style.width = (kx.width-inset*2)+"px";
+      el.style.background = NOTE_COLORS[((seg.midi%12)+12)%12];
       rollEl.appendChild(el); segEls.set(seg, el);
     }
+
     el.style.display = "block"; el.style.top = top+"px"; el.style.height = height+"px";
     if (t >= seg.start && t <= seg.end) active.push(seg.midi);
   });
