@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Piano Note Detector</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Piano Notes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#14141c">
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMAAAADACAIAAADdvvtQAAADG0lEQVR4nO3dMU4bURRA0SGCIh3FFMACqCNRp0uTMk02kA1kZ2yAFUTyBtJGgoYiG4iUAgkQoAj7jjHkn1Nanu/R+Or9ZuzZm+ejCTb1btcnwNsmIBIBkQiIREAkAiIREImASAREIiASAZEIiERAJAIiERCJgEgERCIgEgGR7O/6BF6pT19+Pn7x4vz05c/kldtzU/19T3bzmJJu2cLuPLOetd753zOBpikEYRSZQGmcGEWjB9QLGLyh0QMiGjqgpYbHyENo3ICW/daHbWjcgFiEgEgGDWgbO86Yu9igAbEUAZEIiERAJAIiERDJoAFt4zaMMW/tGDQgliIgknEDWnbHGXP/mkYOaFruWx+2nmnwgOhGD6gPj5HHzySgqRUweD2Tn/Xct9b9GNK5YQLdeX4T6rllAj3Nb+OfSUAktjASAZEIiERAJAIiERCJgEgERCIgEgGRCIhEQCQCIhEQiYBIBEQiIBIBkQiIREAkiz2xcJ4PNz726upq3UOOj4/jsp+//lr3Q//h4vy0XIFpRxfhsYOD92u9f8lHXq5Wq80OPDk52cZnbbBstPEVmN7sRbCFkQiIREAkAiIREImASAREIiASAZEIiERAJAIiERCJgEgERCIgEgGRCIhEQCQCIhEQiYBIBEQiIBIBkQiIREAkAiIREImASAREIiASAZEIiERAJAIiERCJgEgERCIgEgGRCIhEQCQCIhEQiYBIBEQiIBIBkQiIREAkAiIREImASAREIiASAZHs7/oEpmmaLi8vH7xydnZ2ff17ng9Xq9WWlv32/c/GK2/DC1+EjRd8wAQiERCJgEgERCIgEgGRCIhEQCQCIhEQiYBIBEQiIBIBkQiIREAkAiIREImASAREIiASAZEIiERAJAIiERCJgEgERCIgEgGRCIhEQCQCIhEQiYBIBEQiIBIBkezN89EiC83z4SLr3Lr5h9tl17y/7IePPxZc9uL8dKtnu/iySy21WECMyRZGIiASAZEIiERAJAIiERCJgEgERCIgEgGRCIhEQCQCIhEQiYBIBEQiIBIBkQiIREAkAiL5C5fcgU5eyEBRAAAAAElFTkSuQmCC">
+<link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjoiUGlhbm8gTm90ZSBEZXRlY3RvciIsInNob3J0X25hbWUiOiJQaWFubyBOb3RlcyIsInN0YXJ0X3VybCI6Ii4iLCJzY29wZSI6Ii4iLCJkaXNwbGF5Ijoic3RhbmRhbG9uZSIsImJhY2tncm91bmRfY29sb3IiOiIjMTQxNDFjIiwidGhlbWVfY29sb3IiOiIjMTQxNDFjIn0=">
+<style>
+:root{
+  --bg:#f5f5f7; --fg:#141418; --muted:#6b6b76; --accent:#5865f2;
+  --key-white:#ffffff; --key-black:#141418; --key-border:rgba(0,0,0,.28); --panel:#ffffff;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:inherit}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#14141c; --fg:#f2f2f5; --muted:#9a9aa5; --accent:#7c86ff;
+    --key-white:#e8e8ee; --key-black:#0a0a10; --key-border:rgba(255,255,255,.25); --panel:#1d1d27;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#14141c; --fg:#f2f2f5; --muted:#9a9aa5; --accent:#7c86ff;
+  --key-white:#e8e8ee; --key-black:#0a0a10; --key-border:rgba(255,255,255,.25); --panel:#1d1d27;
+}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-tap-highlight-color:transparent}
+#app{display:flex;flex-direction:column;align-items:center;min-height:100%;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));gap:12px}
+h1{font-size:17px;font-weight:600;margin:6px 0 0;letter-spacing:.2px}
+.modes{display:flex;gap:8px}
+.modeBtn{appearance:none;border:1px solid var(--key-border);background:transparent;color:var(--fg);border-radius:999px;padding:6px 18px;font-size:13px;font-weight:600}
+.modeBtn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.panelBlock{width:100%;max-width:420px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.readout{text-align:center}
+.readout .label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.readout .note{font-size:52px;font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums}
+.readout .freq{font-size:15px;color:var(--muted);min-height:1.2em}
+.debug{width:100%;background:var(--panel);border-radius:12px;padding:10px 14px;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted)}
+.debug b{color:var(--fg)}
+.bigBtn{appearance:none;border:none;border-radius:999px;padding:14px 30px;font-size:16px;font-weight:600;background:var(--accent);color:#fff;min-width:200px}
+.bigBtn.on{background:#e5484d}
+#permError{display:none;width:100%;background:var(--panel);border-radius:12px;padding:16px;text-align:center;gap:10px;flex-direction:column}
+#permError p{margin:0;color:var(--muted);font-size:14px}
+.smallBtn{appearance:none;border:none;border-radius:999px;padding:10px 22px;font-size:14px;font-weight:600;background:var(--accent);color:#fff}
+#recStatus{font-size:13px;color:var(--muted);min-height:1.2em;text-align:center}
+.playbackRow{display:flex;gap:10px}
+.pianoScroll{width:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;margin-top:auto}
+.pianoInner{position:relative}
+.roll{position:relative;height:0;overflow:hidden;transition:height .25s ease}
+body.mode-record .roll{height:190px}
+.fnote{position:absolute;background:var(--accent);border-radius:3px;opacity:.85}
+.keyboard{position:relative;height:150px}
+.wkey{position:absolute;top:0;bottom:0;background:var(--key-white);border:1px solid var(--key-border);border-radius:0 0 5px 5px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:6px;transition:background .06s ease}
+.wkey span{font-size:10px;color:var(--muted)}
+.wkey.active{background:var(--accent)}
+.wkey.active span{color:#fff}
+.bkey{position:absolute;top:0;background:var(--key-black);border-radius:0 0 4px 4px;z-index:2;transition:background .06s ease}
+.bkey.active{background:var(--accent)}
+</style>
+</head>
+<body>
+<div id="app">
+  <h1>Piano Note Detector</h1>
+  <div class="modes">
+    <button id="modeLiveBtn" class="modeBtn active">Live</button>
+    <button id="modeRecordBtn" class="modeBtn">Record</button>
+  </div>
+
+  <div id="liveControls" class="panelBlock">
+    <div class="readout">
+      <div class="label">Detected</div>
+      <div class="note" id="noteOut">&mdash;</div>
+      <div class="freq" id="freqOut">&nbsp;</div>
+    </div>
+    <div class="debug" id="debugOut">
+      Listening: <b>NO</b><br>Confidence: <b>0.00</b><br>State: <b>idle</b>
+    </div>
+    <button id="startBtn" class="bigBtn">Start Listening</button>
+    <div id="permError">
+      <p>Microphone access is required to detect piano notes.</p>
+      <button id="retryBtn" class="smallBtn">Try Again</button>
+    </div>
+  </div>
+
+  <div id="recordControls" class="panelBlock" style="display:none">
+    <button id="recordBtn" class="bigBtn">&#9679; Record</button>
+    <div id="recStatus"></div>
+    <audio id="playbackAudio" style="display:none"></audio>
+    <div id="playbackControls" class="playbackRow" style="display:none">
+      <button id="playBtn" class="smallBtn">&#9654; Play</button>
+      <button id="restartBtn" class="smallBtn">&#8635; Restart</button>
+    </div>
+  </div>
+
+  <div id="pianoScroll" class="pianoScroll">
+    <div id="pianoInner" class="pianoInner">
+      <div id="roll" class="roll"></div>
+      <div id="keyboard" class="keyboard"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+function midiToName(m){ return NOTE_NAMES[((m%12)+12)%12] + (Math.floor(m/12)-1); }
+function freqToMidi(f){ return Math.round(69 + 12*Math.log2(f/440)); }
+
+const MIN_F = 24, MAX_F = 4300, WINDOW_SIZE = 4096, HOP_SIZE = 1024;
+
+// ---------- NoteDetector: onset/release state machine with onset/sustain hysteresis ----------
+// While a note is already active, a lower confidence bar keeps it displayed (sustainConfidenceThreshold)
+// than the bar required to start one (onsetConfidenceThreshold). This is what lets a held, decaying
+// piano note keep showing instead of dropping out the moment it gets quieter.
+class NoteDetector{
+  constructor(){
+    this.onsetConfidenceThreshold = 0.55;
+    this.sustainConfidenceThreshold = 0.28;
+    this.framesToConfirmOnset = 2;
+    this.framesToConfirmRelease = 8;
+    this.state = "noNote";
+    this.candidate = null; this.confirmed = null;
+    this.matchFrames = 0; this.mismatchFrames = 0;
+    this.onUpdate = null;
+  }
+  process(estimate){
+    const sustaining = (this.state === "noteActive" || this.state === "possibleRelease");
+    const gate = sustaining ? this.sustainConfidenceThreshold : this.onsetConfidenceThreshold;
+    if (!estimate || estimate.confidence < gate){ this._weak(); return; }
+    const midi = freqToMidi(estimate.frequency);
+    switch(this.state){
+      case "noNote":
+        this.candidate = midi; this.matchFrames = 1; this.state = "possibleNote"; break;
+      case "possibleNote":
+        if (this.candidate === midi){
+          this.matchFrames++;
+          if (this.matchFrames >= this.framesToConfirmOnset){ this.confirmed = this.candidate; this.state = "noteActive"; }
+        } else { this.candidate = midi; this.matchFrames = 1; }
+        break;
+      case "noteActive":
+        if (this.confirmed === midi){ this.mismatchFrames = 0; }
+        else {
+          this.mismatchFrames++;
+          if (this.mismatchFrames >= 2){ this.candidate = midi; this.matchFrames = 1; this.mismatchFrames = 0; this.state = "possibleNote"; }
+        }
+        break;
+      case "possibleRelease":
+        if (this.confirmed === midi){ this.mismatchFrames = 0; this.state = "noteActive"; }
+        else { this.candidate = midi; this.matchFrames = 1; this.state = "possibleNote"; }
+        break;
+    }
+    this._emit(estimate.frequency, estimate.confidence);
+  }
+  _weak(){
+    switch(this.state){
+      case "possibleNote": this.state = "noNote"; this.candidate = null; this.matchFrames = 0; break;
+      case "noteActive": this.mismatchFrames = 1; this.state = "possibleRelease"; break;
+      case "possibleRelease":
+        this.mismatchFrames++;
+        if (this.mismatchFrames >= this.framesToConfirmRelease){ this.state = "noNote"; this.confirmed = null; this.candidate = null; this.mismatchFrames = 0; }
+        break;
+    }
+    this._emit(0, 0);
+  }
+  _emit(freq, conf){
+    const note = (this.state === "noteActive" || this.state === "possibleRelease") ? this.confirmed : null;
+    if (this.onUpdate) this.onUpdate({ state: this.state, midi: note, frequency: freq, confidence: conf });
+  }
+}
+
+// ---------- PitchDetector: YIN algorithm ----------
+class PitchDetector{
+  constructor(minF=MIN_F, maxF=MAX_F, thresh=0.15, rmsGate=0.0012){
+    this.minF=minF; this.maxF=maxF; this.thresh=thresh; this.rmsGate=rmsGate;
+  }
+  estimate(samples, sr){
+    const n = samples.length;
+    if (n <= 8) return null;
+    const maxTau = Math.min(Math.floor(n/2), Math.floor(sr/this.minF));
+    const minTau = Math.max(2, Math.floor(sr/this.maxF));
+    if (maxTau <= minTau+1) return null;
+
+    let rms=0; for (let i=0;i<n;i++) rms += samples[i]*samples[i];
+    rms = Math.sqrt(rms/n);
+    if (rms <= this.rmsGate) return null;
+
+    const d = new Float32Array(maxTau+1);
+    for (let tau=1; tau<=maxTau; tau++){
+      let sum=0; const lim = n - tau;
+      for (let j=0;j<lim;j++){ const diff = samples[j]-samples[j+tau]; sum += diff*diff; }
+      d[tau] = sum;
+    }
+    const cmnd = new Float32Array(maxTau+1); cmnd[0]=1;
+    let running=0;
+    for (let tau=1; tau<=maxTau; tau++){
+      running += d[tau];
+      cmnd[tau] = running===0 ? 1 : d[tau]*tau/running;
+    }
+    let tauEst=-1;
+    for (let tau=minTau; tau<=maxTau; tau++){
+      if (cmnd[tau] < this.thresh){
+        let t=tau;
+        while (t+1<=maxTau && cmnd[t+1] < cmnd[t]) t++;
+        tauEst = t; break;
+      }
+    }
+    if (tauEst===-1){
+      let bestTau=minTau, bestVal=cmnd[minTau];
+      for (let t=minTau;t<=maxTau;t++){ if (cmnd[t]<bestVal){ bestVal=cmnd[t]; bestTau=t; } }
+      tauEst = bestTau;
+    }
+    let refined = tauEst;
+    if (tauEst>0 && tauEst<maxTau){
+      const s0=cmnd[tauEst-1], s1=cmnd[tauEst], s2=cmnd[tauEst+1];
+      const denom = s0+s2-2*s1;
+      if (denom !== 0) refined = tauEst + 0.5*(s0-s2)/denom;
+    }
+    const freq = sr/refined;
+    const conf = Math.max(0, Math.min(1, 1-cmnd[tauEst]));
+    if (freq < this.minF*0.9 || freq > this.maxF*1.1) return null;
+    return { frequency: freq, confidence: conf };
+  }
+}
+
+// ---------- AudioManager: mic capture, ring buffer for live analysis, raw-chunk hook for recording ----------
+class AudioManager{
+  constructor(){
+    this.ctx=null; this.stream=null; this.node=null; this.silentGain=null; this.running=false;
+    this.ringCap = WINDOW_SIZE*3; this.ring=null; this.w=0;
+    this.pitchDetector = new PitchDetector();
+    this.onEstimate=null; this.onRawChunk=null;
+  }
+  async start(){
+    if (this.running) return;
+    this.stream = await navigator.mediaDevices.getUserMedia({ audio: {
+      echoCancellation:false, noiseSuppression:false, autoGainControl:false
+    }});
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    this.ctx = new Ctx({ latencyHint: "interactive" });
+    if (this.ctx.state === "suspended") await this.ctx.resume();
+    this.ring = new Float32Array(this.ringCap); this.w = 0;
+    const source = this.ctx.createMediaStreamSource(this.stream);
+    this.node = this.ctx.createScriptProcessor(HOP_SIZE, 1, 1);
+    this.node.onaudioprocess = (e) => this._onBuffer(e.inputBuffer.getChannelData(0), this.ctx.sampleRate);
+    this.silentGain = this.ctx.createGain(); this.silentGain.gain.value = 0;
+    source.connect(this.node); this.node.connect(this.silentGain); this.silentGain.connect(this.ctx.destination);
+    this.running = true;
+  }
+  stop(){
+    if (!this.running) return;
+    if (this.node){ this.node.onaudioprocess = null; this.node.disconnect(); }
+    if (this.silentGain) this.silentGain.disconnect();
+    if (this.stream) this.stream.getTracks().forEach(t => t.stop());
+    if (this.ctx) this.ctx.close();
+    this.ctx = null; this.stream = null; this.node = null; this.running = false;
+  }
+  resumeIfNeeded(){ if (this.ctx && this.ctx.state === "suspended") this.ctx.resume(); }
+  _onBuffer(input, sr){
+    if (this.onRawChunk) this.onRawChunk(input);
+    for (let i=0;i<input.length;i++){ this.ring[this.w] = input[i]; this.w = (this.w+1) % this.ringCap; }
+    const n = WINDOW_SIZE;
+    const win = new Float32Array(n);
+    let r = (this.w - n + this.ringCap*2) % this.ringCap;
+    for (let i=0;i<n;i++){ win[i] = this.ring[r]; r = (r+1) % this.ringCap; }
+    const est = this.pitchDetector.estimate(win, sr);
+    if (this.onEstimate) this.onEstimate(est);
+  }
+}
+
+// ---------- Offline analysis: reuse the same PitchDetector + NoteDetector on a full recording ----------
+function analyzeOffline(samples, sr){
+  const pd = new PitchDetector();
+  const nd = new NoteDetector();
+  const segs = []; let current = null, t = 0;
+  nd.onUpdate = (out) => {
+    if (out.midi != null){
+      if (!current || current.midi !== out.midi){
+        if (current) segs.push({ midi: current.midi, start: current.start, end: t });
+        current = { midi: out.midi, start: t };
+      }
+    } else if (current){ segs.push({ midi: current.midi, start: current.start, end: t }); current = null; }
+  };
+  for (let pos = WINDOW_SIZE; pos <= samples.length; pos += HOP_SIZE){
+    t = pos / sr;
+    nd.process(pd.estimate(samples.subarray(pos-WINDOW_SIZE, pos), sr));
+  }
+  if (current) segs.push({ midi: current.midi, start: current.start, end: samples.length/sr });
+  return segs;
+}
+
+function encodeWAV(samples, sampleRate){
+  const buf = new ArrayBuffer(44 + samples.length*2);
+  const view = new DataView(buf);
+  const writeStr = (o,s) => { for (let i=0;i<s.length;i++) view.setUint8(o+i, s.charCodeAt(i)); };
+  writeStr(0,"RIFF"); view.setUint32(4, 36+samples.length*2, true); writeStr(8,"WAVE");
+  writeStr(12,"fmt "); view.setUint32(16,16,true); view.setUint16(20,1,true); view.setUint16(22,1,true);
+  view.setUint32(24,sampleRate,true); view.setUint32(28,sampleRate*2,true); view.setUint16(32,2,true); view.setUint16(34,16,true);
+  writeStr(36,"data"); view.setUint32(40, samples.length*2, true);
+  let off=44;
+  for (let i=0;i<samples.length;i++){ const s=Math.max(-1,Math.min(1,samples[i])); view.setInt16(off, s<0? s*0x8000 : s*0x7FFF, true); off+=2; }
+  return new Blob([view], {type:"audio/wav"});
+}
+
+// ---------- Full 88-key keyboard (A0-C8), fixed key width, horizontally scrollable ----------
+const START_MIDI = 21, END_MIDI = 108; // A0 .. C8
+const WHITE_W = 34;
+function isWhite(m){ return ![1,3,6,8,10].includes(((m%12)+12)%12); }
+
+const keyboardEl = document.getElementById("keyboard");
+const rollEl = document.getElementById("roll");
+const pianoInner = document.getElementById("pianoInner");
+const pianoScroll = document.getElementById("pianoScroll");
+const whiteMidis = []; for (let m=START_MIDI;m<=END_MIDI;m++) if (isWhite(m)) whiteMidis.push(m);
+const whiteEls = {}, blackEls = {}, keyX = {};
+
+function buildKeyboard(){
+  keyboardEl.innerHTML = "";
+  const totalWidth = WHITE_W * whiteMidis.length;
+  pianoInner.style.width = totalWidth + "px";
+  whiteMidis.forEach((m, i) => {
+    const left = i * WHITE_W;
+    const el = document.createElement("div");
+    el.className = "wkey"; el.style.left = left+"px"; el.style.width = WHITE_W+"px";
+    if (m % 12 === 0){ const span = document.createElement("span"); span.textContent = midiToName(m); el.appendChild(span); }
+    keyboardEl.appendChild(el);
+    whiteEls[m] = el; keyX[m] = { left, width: WHITE_W };
+  });
+  let wi = -1; const blackW = WHITE_W*0.62, blackH = 150*0.62;
+  for (let m=START_MIDI; m<=END_MIDI; m++){
+    if (isWhite(m)){ wi++; continue; }
+    const left = (wi+1)*WHITE_W - blackW/2;
+    const el = document.createElement("div");
+    el.className = "bkey"; el.style.left = left+"px"; el.style.width = blackW+"px"; el.style.height = blackH+"px";
+    keyboardEl.appendChild(el);
+    blackEls[m] = el; keyX[m] = { left, width: blackW };
+  }
+}
+function setActiveKeys(midis){
+  Object.values(whiteEls).forEach(el => el.classList.remove("active"));
+  Object.values(blackEls).forEach(el => el.classList.remove("active"));
+  midis.forEach(m => { const el = whiteEls[m] || blackEls[m]; if (el) el.classList.add("active"); });
+}
+let lastScrolled = null;
+function scrollToKey(midi){
+  if (midi === lastScrolled) return;
+  lastScrolled = midi;
+  const el = whiteEls[midi] || blackEls[midi];
+  if (el) el.scrollIntoView({ behavior:"smooth", inline:"center", block:"nearest" });
+}
+buildKeyboard();
+
+// ---------- Shared live pipeline ----------
+const audioManager = new AudioManager();
+const noteDetector = new NoteDetector();
+audioManager.onEstimate = (est) => noteDetector.process(est);
+
+const noteOut = document.getElementById("noteOut");
+const freqOut = document.getElementById("freqOut");
+const debugOut = document.getElementById("debugOut");
+const startBtn = document.getElementById("startBtn");
+const permError = document.getElementById("permError");
+const retryBtn = document.getElementById("retryBtn");
+
+noteDetector.onUpdate = (out) => {
+  noteOut.textContent = out.midi != null ? midiToName(out.midi) : "\u2014";
+  freqOut.textContent = out.frequency > 0 ? out.frequency.toFixed(1) + " Hz" : "\u00A0";
+  debugOut.innerHTML = "Listening: <b>" + (audioManager.running ? "YES" : "NO") + "</b><br>" +
+    "Confidence: <b>" + out.confidence.toFixed(2) + "</b><br>State: <b>" + out.state + "</b>";
+  if (out.midi != null){ setActiveKeys([out.midi]); scrollToKey(out.midi); }
+  else setActiveKeys([]);
+};
+
+async function startListening(){
+  permError.style.display = "none";
+  try{
+    await audioManager.start();
+    startBtn.textContent = "Stop Listening"; startBtn.classList.add("on");
+  }catch(err){ permError.style.display = "flex"; }
+}
+function stopListening(){
+  audioManager.stop();
+  startBtn.textContent = "Start Listening"; startBtn.classList.remove("on");
+  noteOut.textContent = "\u2014"; freqOut.textContent = "\u00A0"; setActiveKeys([]);
+}
+startBtn.addEventListener("click", () => { if (audioManager.running) stopListening(); else startListening(); });
+retryBtn.addEventListener("click", startListening);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") audioManager.resumeIfNeeded(); });
+
+// ---------- Mode switching ----------
+const modeLiveBtn = document.getElementById("modeLiveBtn");
+const modeRecordBtn = document.getElementById("modeRecordBtn");
+const liveControls = document.getElementById("liveControls");
+const recordControls = document.getElementById("recordControls");
+let mode = "live";
+function switchMode(m){
+  if (m === mode) return;
+  if (mode === "live" && audioManager.running) stopListening();
+  if (mode === "record"){ stopPlayback(); if (recording) stopRecording(); }
+  mode = m;
+  document.body.classList.toggle("mode-record", m === "record");
+  liveControls.style.display = m === "live" ? "" : "none";
+  recordControls.style.display = m === "record" ? "" : "none";
+  modeLiveBtn.classList.toggle("active", m === "live");
+  modeRecordBtn.classList.toggle("active", m === "record");
+  setActiveKeys([]);
+}
+modeLiveBtn.onclick = () => switchMode("live");
+modeRecordBtn.onclick = () => switchMode("record");
+
+// ---------- Record & Replay ----------
+const recordBtn = document.getElementById("recordBtn");
+const recStatus = document.getElementById("recStatus");
+const playbackAudio = document.getElementById("playbackAudio");
+const playbackControls = document.getElementById("playbackControls");
+const playBtn = document.getElementById("playBtn");
+const restartBtn = document.getElementById("restartBtn");
+
+let recording = false, recordedChunks = [], recordSR = 44100, noteSegments = [], segEls = new Map();
+
+recordBtn.onclick = async () => {
+  if (!recording){
+    recStatus.textContent = "Requesting microphone\u2026";
+    try{ await audioManager.start(); }catch(e){ recStatus.textContent = "Microphone access denied."; return; }
+    recording = true; recordedChunks = []; noteSegments = []; segEls = new Map();
+    rollEl.innerHTML = ""; playbackControls.style.display = "none";
+    recordSR = audioManager.ctx.sampleRate;
+    audioManager.onRawChunk = (chunk) => { if (recording) recordedChunks.push(chunk.slice()); };
+    recordBtn.textContent = "\u25A0 Stop"; recordBtn.classList.add("on");
+    recStatus.textContent = "Recording\u2026";
+  } else {
+    stopRecording();
+  }
+};
+function stopRecording(){
+  recording = false;
+  audioManager.onRawChunk = null;
+  audioManager.stop();
+  recordBtn.textContent = "\u25CF Record"; recordBtn.classList.remove("on");
+  recStatus.textContent = "Analyzing\u2026";
+  setTimeout(processRecording, 30);
+}
+function processRecording(){
+  const total = recordedChunks.reduce((s,c)=>s+c.length,0);
+  const samples = new Float32Array(total);
+  let off=0; recordedChunks.forEach(c=>{ samples.set(c, off); off += c.length; });
+  recordedChunks = [];
+  noteSegments = analyzeOffline(samples, recordSR);
+  const wavBlob = encodeWAV(samples, recordSR);
+  playbackAudio.src = URL.createObjectURL(wavBlob);
+  recStatus.textContent = noteSegments.length ? ("Found " + noteSegments.length + " note" + (noteSegments.length===1?"":"s") + ".") : "No clear notes detected \u2014 try playing closer to the mic.";
+  playbackControls.style.display = "flex";
+}
+
+playBtn.onclick = () => {
+  if (playbackAudio.paused){
+    playbackAudio.play(); playBtn.textContent = "\u23F8 Pause";
+    requestAnimationFrame(renderFrame);
+  } else { playbackAudio.pause(); playBtn.textContent = "\u25B6 Play"; }
+};
+restartBtn.onclick = () => {
+  playbackAudio.currentTime = 0; setActiveKeys([]);
+  playbackAudio.play(); playBtn.textContent = "\u23F8 Pause";
+  requestAnimationFrame(renderFrame);
+};
+playbackAudio.onended = () => { playBtn.textContent = "\u25B6 Play"; setActiveKeys([]); };
+function stopPlayback(){ playbackAudio.pause(); playbackAudio.currentTime = 0; playBtn.textContent = "\u25B6 Play"; }
+
+const PX_PER_SEC = 90;
+function renderFrame(){
+  if (playbackAudio.paused) return;
+  const t = playbackAudio.currentTime;
+  const hitLine = rollEl.clientHeight;
+  const active = [];
+  noteSegments.forEach(seg => {
+    const bottom = hitLine + (t - seg.start) * PX_PER_SEC;
+    const height = Math.max(6, (seg.end - seg.start) * PX_PER_SEC);
+    const top = bottom - height;
+    let el = segEls.get(seg);
+    if (bottom < -40 || top > hitLine + 40){ if (el) el.style.display = "none"; return; }
+    if (!el){
+      el = document.createElement("div"); el.className = "fnote";
+      const kx = keyX[seg.midi]; el.style.left = kx.left+"px"; el.style.width = kx.width+"px";
+      rollEl.appendChild(el); segEls.set(seg, el);
+    }
+    el.style.display = "block"; el.style.top = top+"px"; el.style.height = height+"px";
+    if (t >= seg.start && t <= seg.end) active.push(seg.midi);
+  });
+  setActiveKeys(active);
+  if (active.length) scrollToKey(active[0]);
+  requestAnimationFrame(renderFrame);
+}
+</script>
+</body>
+</html>
