@@ -178,6 +178,11 @@ class NoteDetector{
 class PitchDetector{
   constructor(minF=MIN_F, maxF=MAX_F, thresh=0.15, rmsGate=0.0012){
     this.minF=minF; this.maxF=maxF; this.thresh=thresh; this.rmsGate=rmsGate;
+    this._scratchLen = 0; this._d = null; this._cmnd = null;
+  }
+  _scratch(len){
+    if (this._scratchLen < len){ this._scratchLen = len; this._d = new Float32Array(len); this._cmnd = new Float32Array(len); }
+    return [this._d, this._cmnd];
   }
   estimate(samples, sr){
     const n = samples.length;
@@ -190,13 +195,13 @@ class PitchDetector{
     rms = Math.sqrt(rms/n);
     if (rms <= this.rmsGate) return null;
 
-    const d = new Float32Array(maxTau+1);
+    const [d, cmnd] = this._scratch(maxTau+1);
     for (let tau=1; tau<=maxTau; tau++){
       let sum=0; const lim = n - tau;
       for (let j=0;j<lim;j++){ const diff = samples[j]-samples[j+tau]; sum += diff*diff; }
       d[tau] = sum;
     }
-    const cmnd = new Float32Array(maxTau+1); cmnd[0]=1;
+    cmnd[0]=1;
     let running=0;
     for (let tau=1; tau<=maxTau; tau++){
       running += d[tau];
@@ -233,6 +238,7 @@ class AudioManager{
   constructor(){
     this.ctx=null; this.stream=null; this.node=null; this.silentGain=null; this.running=false;
     this.ringCap = WINDOW_SIZE*3; this.ring=null; this.w=0;
+    this.scratchWindow = new Float32Array(WINDOW_SIZE);
     this.pitchDetector = new PitchDetector();
     this.onEstimate=null; this.onRawChunk=null;
   }
@@ -265,7 +271,7 @@ class AudioManager{
     if (this.onRawChunk) this.onRawChunk(input);
     for (let i=0;i<input.length;i++){ this.ring[this.w] = input[i]; this.w = (this.w+1) % this.ringCap; }
     const n = WINDOW_SIZE;
-    const win = new Float32Array(n);
+    const win = this.scratchWindow;
     let r = (this.w - n + this.ringCap*2) % this.ringCap;
     for (let i=0;i<n;i++){ win[i] = this.ring[r]; r = (r+1) % this.ringCap; }
     const est = this.pitchDetector.estimate(win, sr);
@@ -422,6 +428,7 @@ const playBtn = document.getElementById("playBtn");
 const restartBtn = document.getElementById("restartBtn");
 
 let recording = false, recordedChunks = [], recordSR = 44100, noteSegments = [], segEls = new Map();
+let currentPlaybackUrl = null;
 
 recordBtn.onclick = async () => {
   if (!recording){
@@ -452,7 +459,9 @@ function processRecording(){
   recordedChunks = [];
   noteSegments = analyzeOffline(samples, recordSR);
   const wavBlob = encodeWAV(samples, recordSR);
-  playbackAudio.src = URL.createObjectURL(wavBlob);
+  if (currentPlaybackUrl) URL.revokeObjectURL(currentPlaybackUrl);
+  currentPlaybackUrl = URL.createObjectURL(wavBlob);
+  playbackAudio.src = currentPlaybackUrl;
   recStatus.textContent = noteSegments.length ? ("Found " + noteSegments.length + " note" + (noteSegments.length===1?"":"s") + ".") : "No clear notes detected \u2014 try playing closer to the mic.";
   playbackControls.style.display = "flex";
 }
@@ -460,20 +469,22 @@ function processRecording(){
 playBtn.onclick = () => {
   if (playbackAudio.paused){
     playbackAudio.play(); playBtn.textContent = "\u23F8 Pause";
-    requestAnimationFrame(renderFrame);
+    startRenderLoop();
   } else { playbackAudio.pause(); playBtn.textContent = "\u25B6 Play"; }
 };
 restartBtn.onclick = () => {
   playbackAudio.currentTime = 0; setActiveKeys([]);
   playbackAudio.play(); playBtn.textContent = "\u23F8 Pause";
-  requestAnimationFrame(renderFrame);
+  startRenderLoop();
 };
 playbackAudio.onended = () => { playBtn.textContent = "\u25B6 Play"; setActiveKeys([]); };
 function stopPlayback(){ playbackAudio.pause(); playbackAudio.currentTime = 0; playBtn.textContent = "\u25B6 Play"; }
 
 const PX_PER_SEC = 90;
+let rafActive = false;
+function startRenderLoop(){ if (!rafActive){ rafActive = true; requestAnimationFrame(renderFrame); } }
 function renderFrame(){
-  if (playbackAudio.paused) return;
+  if (playbackAudio.paused){ rafActive = false; return; }
   const t = playbackAudio.currentTime;
   const hitLine = rollEl.clientHeight;
   const active = [];
