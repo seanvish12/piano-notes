@@ -373,6 +373,7 @@ noteDetector.onUpdate = (out) => {
   freqOut.textContent = out.frequency > 0 ? out.frequency.toFixed(1) + " Hz" : "\u00A0";
   debugOut.innerHTML = "Listening: <b>" + (audioManager.running ? "YES" : "NO") + "</b><br>" +
     "Confidence: <b>" + out.confidence.toFixed(2) + "</b><br>State: <b>" + out.state + "</b>";
+  if (mode !== "live") return; // don't light up keys while a recording is in progress
   if (out.midi != null){ setActiveKeys([out.midi]); scrollToKey(out.midi); }
   else setActiveKeys([]);
 };
@@ -410,6 +411,8 @@ function switchMode(m){
   modeLiveBtn.classList.toggle("active", m === "live");
   modeRecordBtn.classList.toggle("active", m === "record");
   setActiveKeys([]);
+  lastScrolled = null;
+  centerKeyboard();
 }
 modeLiveBtn.onclick = () => switchMode("live");
 modeRecordBtn.onclick = () => switchMode("record");
