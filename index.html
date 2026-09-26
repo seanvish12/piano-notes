@@ -114,16 +114,31 @@ class NoteDetector{
     this.sustainConfidenceThreshold = 0.28;
     this.framesToConfirmOnset = 2;
     this.framesToConfirmRelease = 8;
+    this.reattackRatio = 1.6;   // a fresh strike must be at least this much louder than the moment before
+    this.reattackMinRms = 0.01; // ...and loud enough in absolute terms that it isn't just noise-floor jitter
     this.state = "noNote";
     this.candidate = null; this.confirmed = null;
     this.matchFrames = 0; this.mismatchFrames = 0;
+    this.lastRms = 0;
     this.onUpdate = null;
   }
   process(estimate){
+    const rmsNow = estimate ? estimate.rms : 0;
     const sustaining = (this.state === "noteActive" || this.state === "possibleRelease");
     const gate = sustaining ? this.sustainConfidenceThreshold : this.onsetConfidenceThreshold;
-    if (!estimate || estimate.confidence < gate){ this._weak(); return; }
+    if (!estimate || estimate.confidence < gate){ this._weak(); this.lastRms = rmsNow; return; }
     const midi = freqToMidi(estimate.frequency);
+    // Same pitch reappearing while we're still "active"/"maybe releasing" is ambiguous on pitch alone —
+    // it could be the same held note, or a fresh re-strike of the same key. A sudden loudness jump means
+    // it's a new hammer strike, so force the old note closed and start a brand new onset.
+    if (sustaining && midi === this.confirmed && rmsNow > this.reattackMinRms && rmsNow > this.lastRms * this.reattackRatio){
+      this.state = "noNote"; this.confirmed = null; this.candidate = null; this.matchFrames = 0; this.mismatchFrames = 0;
+      this._emit(0, 0); // closes out the previous press
+      this.candidate = midi; this.matchFrames = 1; this.state = "possibleNote";
+      this.lastRms = rmsNow;
+      this._emit(estimate.frequency, estimate.confidence);
+      return;
+    }
     switch(this.state){
       case "noNote":
         this.candidate = midi; this.matchFrames = 1; this.state = "possibleNote"; break;
@@ -145,6 +160,7 @@ class NoteDetector{
         else { this.candidate = midi; this.matchFrames = 1; this.state = "possibleNote"; }
         break;
     }
+    this.lastRms = rmsNow;
     this._emit(estimate.frequency, estimate.confidence);
   }
   _weak(){
@@ -219,7 +235,7 @@ class PitchDetector{
     const freq = sr/refined;
     const conf = Math.max(0, Math.min(1, 1-cmnd[tauEst]));
     if (freq < this.minF*0.9 || freq > this.maxF*1.1) return null;
-    return { frequency: freq, confidence: conf };
+    return { frequency: freq, confidence: conf, rms: rms };
   }
 }
 
