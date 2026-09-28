@@ -41,6 +41,9 @@ h1{font-size:17px;font-weight:600;margin:6px 0 0;letter-spacing:.2px}
 .smallBtn{appearance:none;border:none;border-radius:999px;padding:10px 22px;font-size:14px;font-weight:600;background:var(--accent);color:#fff}
 #recStatus{font-size:13px;color:var(--muted);min-height:1.2em;text-align:center}
 .playbackRow{display:flex;gap:10px}
+.speedRow{flex-direction:column;align-items:center;gap:6px;width:100%;max-width:280px;font-size:13px;color:var(--muted)}
+.speedRow b{color:var(--fg)}
+.speedRow input{width:100%}
 .pianoScroll{width:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;margin-top:auto}
 .pianoInner{position:relative}
 .roll{position:relative;height:0;overflow:hidden;transition:height .25s ease}
@@ -86,6 +89,10 @@ body.mode-record .roll{height:190px}
     <div id="playbackControls" class="playbackRow" style="display:none">
       <button id="playBtn" class="smallBtn">&#9654; Play</button>
       <button id="restartBtn" class="smallBtn">&#8635; Restart</button>
+    </div>
+    <div id="speedRow" class="speedRow" style="display:none">
+      <span>Speed: <b id="speedVal">1x</b></span>
+      <input type="range" id="speedSlider" min="0.25" max="2" step="0.25" value="1">
     </div>
   </div>
 
@@ -477,8 +484,22 @@ function processRecording(){
   currentPlaybackUrl = URL.createObjectURL(wavBlob);
   playbackAudio.src = currentPlaybackUrl;
   recStatus.textContent = noteSegments.length ? ("Found " + noteSegments.length + " note" + (noteSegments.length===1?"":"s") + ".") : "No clear notes detected \u2014 try playing closer to the mic.";
+  playbackAudio.playbackRate = parseFloat(speedSlider.value);
   playbackControls.style.display = "flex";
+  speedRow.style.display = "flex";
+  updateRoll(0); // show the notes lined up above the keys, ready to play
 }
+
+// Playback speed: the audio's playbackRate changes, and because the falling notes are positioned from the
+// audio's own currentTime, they speed up / slow down with it automatically.
+const speedRow = document.getElementById("speedRow");
+const speedSlider = document.getElementById("speedSlider");
+const speedVal = document.getElementById("speedVal");
+speedSlider.oninput = () => {
+  const rate = parseFloat(speedSlider.value);
+  playbackAudio.playbackRate = rate;
+  speedVal.textContent = rate + "x";
+};
 
 playBtn.onclick = () => {
   if (playbackAudio.paused){
@@ -491,8 +512,17 @@ restartBtn.onclick = () => {
   playbackAudio.play(); playBtn.textContent = "\u23F8 Pause";
   startRenderLoop();
 };
-playbackAudio.onended = () => { playBtn.textContent = "\u25B6 Play"; setActiveKeys([]); };
-function stopPlayback(){ playbackAudio.pause(); playbackAudio.currentTime = 0; playBtn.textContent = "\u25B6 Play"; }
+playbackAudio.onended = () => {
+  playBtn.textContent = "\u25B6 Play";
+  playbackAudio.currentTime = 0;
+  updateRoll(0); // reset the notes to their starting positions instead of leaving them frozen
+  setActiveKeys([]);
+};
+function stopPlayback(){
+  playbackAudio.pause(); playbackAudio.currentTime = 0; playBtn.textContent = "\u25B6 Play";
+  if (noteSegments.length) updateRoll(0);
+  setActiveKeys([]);
+}
 
 const PX_PER_SEC = 90;
 const NOTE_COLORS = ["#ff5c7a","#ff8a5c","#ffcf5c","#c8e05c","#6be07a","#4be0c2","#4bb8e0","#4b8fe0","#6b6bff","#a45cff","#e05cd9","#e05c8f"];
@@ -500,7 +530,12 @@ let rafActive = false;
 function startRenderLoop(){ if (!rafActive){ rafActive = true; requestAnimationFrame(renderFrame); } }
 function renderFrame(){
   if (playbackAudio.paused){ rafActive = false; return; }
-  const t = playbackAudio.currentTime;
+  updateRoll(playbackAudio.currentTime);
+  requestAnimationFrame(renderFrame);
+}
+// Draws every falling note for time t (seconds into the clip). Everything is driven by the audio's own
+// currentTime, so it stays in sync at any playback speed automatically.
+function updateRoll(t){
   const hitLine = rollEl.clientHeight;
   const active = [];
   noteSegments.forEach(seg => {
@@ -522,7 +557,6 @@ function renderFrame(){
   });
   setActiveKeys(active);
   if (active.length) scrollToKey(active[0]);
-  requestAnimationFrame(renderFrame);
 }
 </script>
 </body>
