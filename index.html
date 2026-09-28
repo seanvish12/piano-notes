@@ -503,14 +503,18 @@ speedSlider.oninput = () => {
 
 playBtn.onclick = () => {
   if (playbackAudio.paused){
-    playbackAudio.play(); playBtn.textContent = "\u23F8 Pause";
+    playBtn.textContent = "\u23F8 Pause";
     startRenderLoop();
+    const p = playbackAudio.play();
+    if (p && p.catch) p.catch(err => { recStatus.textContent = "Playback couldn't start: " + err.message; playBtn.textContent = "\u25B6 Play"; });
   } else { playbackAudio.pause(); playBtn.textContent = "\u25B6 Play"; }
 };
 restartBtn.onclick = () => {
   playbackAudio.currentTime = 0; setActiveKeys([]);
-  playbackAudio.play(); playBtn.textContent = "\u23F8 Pause";
+  playBtn.textContent = "\u23F8 Pause";
   startRenderLoop();
+  const p = playbackAudio.play();
+  if (p && p.catch) p.catch(err => { recStatus.textContent = "Playback couldn't start: " + err.message; playBtn.textContent = "\u25B6 Play"; });
 };
 playbackAudio.onended = () => {
   playBtn.textContent = "\u25B6 Play";
