@@ -121,6 +121,7 @@ class NoteDetector{
     this.sustainConfidenceThreshold = 0.28;
     this.framesToConfirmOnset = 2;
     this.framesToConfirmRelease = 8;
+    this.framesToLeaveActive = 4; // how many consecutive disagreeing frames before we'll abandon an already-playing note
     this.reattackRatio = 1.6;   // a fresh strike must be at least this much louder than the moment before
     this.reattackMinRms = 0.01; // ...and loud enough in absolute terms that it isn't just noise-floor jitter
     this.state = "noNote";
@@ -129,6 +130,10 @@ class NoteDetector{
     this.lastRms = 0;
     this.onUpdate = null;
   }
+  // A YIN attack-transient artifact is almost always an exact octave off the real note (a harmonic
+  // briefly dominating), never some unrelated pitch — so an octave-related reading doesn't count as
+  // disagreement at all; it's forgiven outright rather than just delayed.
+  _isOctaveOf(a, b){ const diff = Math.abs(a-b); return diff !== 0 && diff % 12 === 0 && diff <= 24; }
   process(estimate){
     const rmsNow = estimate ? estimate.rms : 0;
     const sustaining = (this.state === "noteActive" || this.state === "possibleRelease");
@@ -150,20 +155,20 @@ class NoteDetector{
       case "noNote":
         this.candidate = midi; this.matchFrames = 1; this.state = "possibleNote"; break;
       case "possibleNote":
-        if (this.candidate === midi){
+        if (this.candidate === midi || this._isOctaveOf(midi, this.candidate)){
           this.matchFrames++;
           if (this.matchFrames >= this.framesToConfirmOnset){ this.confirmed = this.candidate; this.state = "noteActive"; }
         } else { this.candidate = midi; this.matchFrames = 1; }
         break;
       case "noteActive":
-        if (this.confirmed === midi){ this.mismatchFrames = 0; }
+        if (this.confirmed === midi || this._isOctaveOf(midi, this.confirmed)){ this.mismatchFrames = 0; }
         else {
           this.mismatchFrames++;
-          if (this.mismatchFrames >= 2){ this.candidate = midi; this.matchFrames = 1; this.mismatchFrames = 0; this.state = "possibleNote"; }
+          if (this.mismatchFrames >= this.framesToLeaveActive){ this.candidate = midi; this.matchFrames = 1; this.mismatchFrames = 0; this.state = "possibleNote"; }
         }
         break;
       case "possibleRelease":
-        if (this.confirmed === midi){ this.mismatchFrames = 0; this.state = "noteActive"; }
+        if (this.confirmed === midi || this._isOctaveOf(midi, this.confirmed)){ this.mismatchFrames = 0; this.state = "noteActive"; }
         else { this.candidate = midi; this.matchFrames = 1; this.state = "possibleNote"; }
         break;
     }
