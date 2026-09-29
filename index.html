@@ -140,6 +140,9 @@ class NoteDetector{
     const gate = sustaining ? this.sustainConfidenceThreshold : this.onsetConfidenceThreshold;
     if (!estimate || estimate.confidence < gate){ this._weak(); this.lastRms = rmsNow; return; }
     const midi = freqToMidi(estimate.frequency);
+    // The detector's frequency margin reaches a little past A0/C8 at the ends, but the keyboard only
+    // has keys for MIDI 21-108 — anything outside that range can't be rendered, so treat it as noise.
+    if (midi < 21 || midi > 108){ this._weak(); this.lastRms = rmsNow; return; }
     // Same pitch reappearing while we're still "active"/"maybe releasing" is ambiguous on pitch alone —
     // it could be the same held note, or a fresh re-strike of the same key. A sudden loudness jump means
     // it's a new hammer strike, so force the old note closed and start a brand new onset.
@@ -555,6 +558,8 @@ function updateRoll(t){
   const hitLine = rollEl.clientHeight;
   const active = [];
   noteSegments.forEach(seg => {
+    const kx = keyX[seg.midi];
+    if (!kx) return; // safety net: a segment with no matching key on the keyboard is skipped, not fatal
     const bottom = hitLine + (t - seg.start) * PX_PER_SEC;
     const height = Math.max(18, (seg.end - seg.start) * PX_PER_SEC);
     const top = bottom - height;
@@ -562,7 +567,7 @@ function updateRoll(t){
     if (bottom < -40 || top > hitLine + 40){ if (el) el.style.display = "none"; return; }
     if (!el){
       el = document.createElement("div"); el.className = "fnote";
-      const kx = keyX[seg.midi]; const inset = Math.min(3, kx.width*0.12);
+      const inset = Math.min(3, kx.width*0.12);
       el.style.left = (kx.left+inset)+"px"; el.style.width = (kx.width-inset*2)+"px";
       el.style.background = NOTE_COLORS[((seg.midi%12)+12)%12];
       rollEl.appendChild(el); segEls.set(seg, el);
