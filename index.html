@@ -458,10 +458,11 @@ let currentPlaybackUrl = null;
 
 recordBtn.onclick = async () => {
   if (!recording){
+    stopPlayback(); // in case the previous recording's clip was still playing
     recStatus.textContent = "Requesting microphone\u2026";
     try{ await audioManager.start(); }catch(e){ recStatus.textContent = "Microphone access denied."; return; }
     recording = true; recordedChunks = []; noteSegments = []; segEls = new Map();
-    rollEl.innerHTML = ""; playbackControls.style.display = "none";
+    rollEl.innerHTML = ""; playbackControls.style.display = "none"; speedRow.style.display = "none";
     recordSR = audioManager.ctx.sampleRate;
     audioManager.onRawChunk = (chunk) => { if (recording) recordedChunks.push(chunk.slice()); };
     recordBtn.textContent = "\u25A0 Stop"; recordBtn.classList.add("on");
@@ -488,7 +489,13 @@ function processRecording(){
   if (currentPlaybackUrl) URL.revokeObjectURL(currentPlaybackUrl);
   currentPlaybackUrl = URL.createObjectURL(wavBlob);
   playbackAudio.src = currentPlaybackUrl;
-  recStatus.textContent = noteSegments.length ? ("Found " + noteSegments.length + " note" + (noteSegments.length===1?"":"s") + ".") : "No clear notes detected \u2014 try playing closer to the mic.";
+  if (noteSegments.length){
+    recStatus.textContent = "Found " + noteSegments.length + " note" + (noteSegments.length===1?"":"s") + ".";
+    recStatus.style.color = "var(--muted)";
+  } else {
+    recStatus.textContent = "\u26A0 No notes detected in that recording \u2014 try playing closer to the mic, or louder.";
+    recStatus.style.color = "#ff5c7a";
+  }
   playbackAudio.playbackRate = parseFloat(speedSlider.value);
   playbackControls.style.display = "flex";
   speedRow.style.display = "flex";
