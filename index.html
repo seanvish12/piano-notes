@@ -51,10 +51,15 @@ body.mode-live #panel{flex:1 1 auto;min-height:0;overflow:auto;display:flex;alig
 .soundRow,.speedRow{align-items:center;gap:8px;font-size:13px;color:var(--muted)}
 .speedRow b{color:var(--fg)}
 .speedRow input{width:130px}
-.credit{font-size:10px;color:var(--muted);text-align:center;opacity:.7}
+.importBtn{background:#2a2a36 !important}
+.importRow{font-size:13px;color:var(--muted)}
+.importName{color:var(--fg);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.timeIn{width:64px;margin-left:4px;background:#1d1d27;color:var(--fg);border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 8px;font-size:16px;text-align:center}
+button:disabled{opacity:.4}
+.credit{position:absolute;top:4px;right:8px;left:8px;z-index:3;pointer-events:none;font-size:10px;color:var(--muted);text-align:right;opacity:.6}
 
 /* The stage = falling notes (fills all the leftover height) + the keyboard, pinned to the bottom edge. */
-#stage{flex:0 0 auto;display:flex;flex-direction:column;background:#000;padding-bottom:env(safe-area-inset-bottom,0px)}
+#stage{position:relative;flex:0 0 auto;display:flex;flex-direction:column;background:#000;padding-bottom:env(safe-area-inset-bottom,0px)}
 body.mode-record #stage{flex:1 1 auto;min-height:0}
 .roll{display:none;flex:1 1 auto;min-height:0;position:relative;overflow:hidden}
 body.mode-record .roll{display:block}
@@ -133,10 +138,18 @@ body.mode-record .roll{display:block}
     <div id="recordControls" class="panelBlock" style="display:none">
       <div class="ctrlRow">
         <button id="recordBtn" class="bigBtn">&#9679; Record</button>
+        <button id="importBtn" class="bigBtn importBtn">&#128193; Import file</button>
+        <input type="file" id="fileInput" accept="audio/*,video/*,.mp3,.m4a,.wav,.aac,.mp4,.mov,.flac,.ogg" style="display:none">
         <div id="playbackControls" class="playbackRow" style="display:none">
           <button id="playBtn" class="smallBtn">&#9654; Play</button>
           <button id="restartBtn" class="smallBtn">&#8635; Restart</button>
         </div>
+      </div>
+      <div id="importRow" class="ctrlRow importRow" style="display:none">
+        <span id="importName" class="importName"></span>
+        <label>From <input id="importStart" class="timeIn" type="text" inputmode="decimal" autocomplete="off" value="0:00"></label>
+        <label>to <input id="importEnd" class="timeIn" type="text" inputmode="decimal" autocomplete="off" value="0:30"></label>
+        <button id="analyzeBtn" class="smallBtn">Analyze</button>
       </div>
       <div id="recStatus"></div>
       <audio id="playbackAudio" style="display:none"></audio>
@@ -151,11 +164,11 @@ body.mode-record .roll{display:block}
           <input type="range" id="speedSlider" min="0.25" max="2" step="0.25" value="1">
         </div>
       </div>
-      <div id="credit" class="credit" style="display:none">Piano sounds: Salamander Grand Piano by Alexander Holm (CC BY 3.0), via Tone.js</div>
     </div>
   </section>
 
   <div id="stage">
+    <div id="credit" class="credit" style="display:none">Piano sounds: Salamander Grand Piano by Alexander Holm (CC BY 3.0), via Tone.js</div>
     <div id="roll" class="roll"></div>
     <div id="keyboard" class="keyboard"></div>
   </div>
@@ -383,6 +396,38 @@ function analyzeOffline(samples, sr){
   return segs;
 }
 
+// Same analysis, but it pauses every few hundred milliseconds so the screen keeps updating and can show
+// progress. Used for longer clips (imported files), where the sync version would freeze the page.
+async function analyzeOfflineAsync(samples, sr, onProgress){
+  const pd = new PitchDetector();
+  const nd = new NoteDetector();
+  const segs = []; let current = null, t = 0;
+  const close = (endT) => { segs.push({ midi: current.midi, start: current.start, end: endT, peak: current.peak }); };
+  nd.onUpdate = (out) => {
+    if (out.midi != null){
+      if (!current || current.midi !== out.midi){
+        if (current) close(t);
+        current = { midi: out.midi, start: t, peak: 0 };
+      }
+      if (out.rms > current.peak) current.peak = out.rms;
+    } else if (current){ close(t); current = null; }
+  };
+  let lastYield = performance.now();
+  for (let pos = WINDOW_SIZE; pos <= samples.length; pos += HOP_SIZE){
+    t = pos / sr;
+    nd.process(pd.estimate(samples.subarray(pos-WINDOW_SIZE, pos), sr));
+    if (performance.now() - lastYield > 120){
+      if (onProgress) onProgress(Math.round(100 * pos / samples.length));
+      await new Promise(r => setTimeout(r, 0));
+      lastYield = performance.now();
+    }
+  }
+  if (current) close(samples.length/sr);
+  const maxPeak = segs.reduce((m, sg) => Math.max(m, sg.peak), 0) || 1;
+  segs.forEach(sg => { sg.vel = Math.min(1, Math.max(0.25, Math.sqrt(sg.peak / maxPeak))); });
+  return segs;
+}
+
 function encodeWAV(samples, sampleRate){
   const buf = new ArrayBuffer(44 + samples.length*2);
   const view = new DataView(buf);
@@ -508,8 +553,10 @@ let recording = false, recordedChunks = [], recordSR = 44100, noteSegments = [],
 let currentPlaybackUrl = null;
 
 recordBtn.onclick = async () => {
+  if (analyzing) return;
   if (!recording){
     stopPlayback(); // in case the previous recording's clip was still playing
+    importRow.style.display = "none";
     recStatus.textContent = "Requesting microphone\u2026";
     try{ await audioManager.start(); }catch(e){ recStatus.textContent = "Microphone access denied."; return; }
     recording = true; recordedChunks = []; noteSegments = []; segEls = new Map();
@@ -535,11 +582,22 @@ function processRecording(){
   const samples = new Float32Array(total);
   let off=0; recordedChunks.forEach(c=>{ samples.set(c, off); off += c.length; });
   recordedChunks = [];
-  noteSegments = analyzeOffline(samples, recordSR);
+  loadTake(samples, recordSR);
+}
+// Analyzes a clip (a mic recording or part of an imported file) and gets it ready to play.
+let analyzing = false;
+async function loadTake(samples, sr){
+  analyzing = true; setBusy(true);
+  stopPlayback();
+  noteSegments = []; segEls = new Map(); rollEl.innerHTML = "";
+  recStatus.style.color = "var(--muted)"; recStatus.textContent = "Analyzing\u2026";
+  try{
+    noteSegments = await analyzeOfflineAsync(samples, sr, pct => { recStatus.textContent = "Analyzing\u2026 " + pct + "%"; });
+  } finally { analyzing = false; setBusy(false); }
   noteSegments.sort((a,b) => a.start - b.start);
   player.clipPos = 0;
   player.endTime = noteSegments.reduce((m, sg) => Math.max(m, sg.end), 0) + 0.5; // + tail for the last note's release
-  const wavBlob = encodeWAV(samples, recordSR);
+  const wavBlob = encodeWAV(samples, sr);
   if (currentPlaybackUrl) URL.revokeObjectURL(currentPlaybackUrl);
   currentPlaybackUrl = URL.createObjectURL(wavBlob);
   playbackAudio.src = currentPlaybackUrl;
@@ -614,6 +672,87 @@ class PianoSynth{
     this.bus = this.ctx.createGain(); this.bus.connect(this.out);
   }
 }
+
+// ---------- Import an audio/video file and analyze part of it ----------
+const importBtn = document.getElementById("importBtn");
+const fileInput = document.getElementById("fileInput");
+const importRow = document.getElementById("importRow");
+const importName = document.getElementById("importName");
+const importStart = document.getElementById("importStart");
+const importEnd = document.getElementById("importEnd");
+const analyzeBtn = document.getElementById("analyzeBtn");
+let importedBuffer = null;
+const MAX_IMPORT_SECONDS = 120; // analysis on a phone takes roughly a fraction of the clip's length; keep it bounded
+
+function setBusy(b){ [recordBtn, importBtn, analyzeBtn, playBtn, restartBtn].forEach(el => { el.disabled = b; }); }
+function fmtTime(sec){ const m = Math.floor(sec / 60), s = sec - m * 60; return m + ":" + (s < 10 ? "0" : "") + s.toFixed(s % 1 ? 1 : 0); }
+// Accepts "83", "83.5", "1:23" or "1:23.5".
+function parseTime(str){
+  str = String(str).trim().replace(",", ".");
+  if (!str) return NaN;
+  const parts = str.split(":");
+  if (parts.length > 2 || parts.some(p => p === "" || isNaN(p))) return NaN;
+  return parts.length === 2 ? parseFloat(parts[0]) * 60 + parseFloat(parts[1]) : parseFloat(parts[0]);
+}
+function decodeAudio(ctx, arr){
+  return new Promise((res, rej) => {
+    const p = ctx.decodeAudioData(arr, res, rej); // callback form also works on older Safari
+    if (p && p.then) p.then(res, rej);
+  });
+}
+function readFile(f){
+  if (f.arrayBuffer) return f.arrayBuffer();
+  return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsArrayBuffer(f); });
+}
+
+importBtn.onclick = () => {
+  if (recording || analyzing) return;
+  stopPlayback();
+  fileInput.value = "";
+  fileInput.click();
+};
+fileInput.onchange = async () => {
+  const f = fileInput.files && fileInput.files[0];
+  if (!f) return;
+  recStatus.style.color = "var(--muted)"; recStatus.textContent = "Opening " + f.name + "…";
+  setBusy(true);
+  try{
+    const ctx = ensureAudio();
+    importedBuffer = await decodeAudio(ctx, await readFile(f));
+  }catch(e){
+    importedBuffer = null; importRow.style.display = "none";
+    recStatus.style.color = "#ff5c7a";
+    recStatus.textContent = "Couldn't read that file. Try an audio file (MP3, M4A, WAV) or a video (MP4, MOV).";
+    return;
+  }finally{ setBusy(false); }
+  const dur = importedBuffer.duration;
+  importName.textContent = f.name + " (" + fmtTime(Math.floor(dur)) + ")";
+  importStart.value = "0:00";
+  importEnd.value = fmtTime(Math.floor(Math.min(dur, 30)));
+  importRow.style.display = "flex";
+  recStatus.textContent = "Choose which part to analyze, then tap Analyze.";
+};
+analyzeBtn.onclick = async () => {
+  if (!importedBuffer || analyzing) return;
+  const dur = importedBuffer.duration;
+  let a = parseTime(importStart.value), b = parseTime(importEnd.value);
+  const bad = msg => { recStatus.style.color = "#ff5c7a"; recStatus.textContent = msg; };
+  if (isNaN(a) || isNaN(b)) return bad("Write times like 1:05 or 65.");
+  b = Math.min(b, dur);
+  if (a < 0 || a >= dur) return bad("The start is past the end of the file (" + fmtTime(Math.floor(dur)) + ").");
+  if (b <= a) return bad("The end has to be after the start.");
+  if (b - a > MAX_IMPORT_SECONDS) return bad("Choose at most " + (MAX_IMPORT_SECONDS / 60) + " minutes at a time.");
+  // Mix the chosen part down to one channel.
+  const sr = importedBuffer.sampleRate;
+  const i0 = Math.floor(a * sr), i1 = Math.floor(b * sr), n = i1 - i0;
+  const mono = new Float32Array(n);
+  const chs = importedBuffer.numberOfChannels;
+  for (let c = 0; c < chs; c++){
+    const d = importedBuffer.getChannelData(c);
+    for (let i = 0; i < n; i++) mono[i] += d[i0 + i] / chs;
+  }
+  await loadTake(mono, sr);
+};
 
 // ---------- Real piano samples ----------
 // Recordings of a real grand piano (Salamander Grand Piano by Alexander Holm, CC BY 3.0, hosted by Tone.js).
