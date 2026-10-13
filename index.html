@@ -79,6 +79,28 @@ body.mode-record .roll{display:block}
   body.mode-record{--kb-h:clamp(90px, 30vh, 320px)}
   #panel{padding-bottom:6px}
 }
+
+/* iPhone held upright: Safari can't lock orientation, so the whole app is turned 90 degrees and laid out
+   as landscape. Turn the phone sideways (top edge to the left) and it reads normally. If rotation lock is off
+   and the phone really switches to landscape, this rule stops applying and the normal landscape layout is used,
+   which looks the same. Inside here the app's width is the screen's height (vh) and its height is the
+   screen's width (vw), so sizes use vw where the landscape layout uses vh. */
+@media (orientation:portrait) and (max-width:600px) and (pointer:coarse){
+  #app{position:fixed;top:0;left:0;width:100vh;width:100dvh;height:100vw;
+       transform:translateX(100vw) rotate(90deg);transform-origin:top left;
+       padding-top:0;padding-left:env(safe-area-inset-top,0px);padding-right:env(safe-area-inset-bottom,0px)}
+  #stage{padding-bottom:0}
+  :root{--kb-h:clamp(90px,30vw,320px)}
+  body.mode-live{--kb-h:clamp(100px,38vw,380px)}
+  body.mode-record{--kb-h:clamp(90px,30vw,320px)}
+  .top{padding:4px 14px}
+  .bigBtn{padding:8px 18px;font-size:14px;min-width:0}
+  .readout .note{font-size:34px}
+  .readout .freq{display:none}
+  body.mode-live #liveControls{flex-direction:row;flex-wrap:wrap;justify-content:center}
+  #panel{padding-bottom:6px}
+  .wkey span{font-size:clamp(8px,1.6vh,12px)}
+}
 </style>
 </head>
 <body class="mode-live">
