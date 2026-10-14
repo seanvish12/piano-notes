@@ -52,6 +52,9 @@ body.mode-live #panel{flex:1 1 auto;min-height:0;overflow:auto;display:flex;alig
 .speedRow b{color:var(--fg)}
 .speedRow input{width:130px}
 .importBtn{background:#2a2a36 !important}
+.detectRow{display:none;gap:4px;margin-left:auto}
+body.mode-record .detectRow{display:flex}
+.detectRow .modeBtn{padding:4px 12px;font-size:12px}
 .importRow{font-size:13px;color:var(--muted)}
 .importName{color:var(--fg);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .timeIn{width:64px;margin-left:4px;background:#1d1d27;color:var(--fg);border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 8px;font-size:16px;text-align:center}
@@ -112,6 +115,10 @@ body.mode-record .roll{display:block}
 <div id="app">
   <header class="top">
     <h1>Piano Note Detector</h1>
+    <div class="detectRow">
+      <button id="detChordsBtn" class="modeBtn active" title="Hears several notes at once">Chords (AI)</button>
+      <button id="detSingleBtn" class="modeBtn" title="One note at a time">Single notes</button>
+    </div>
     <div class="modes">
       <button id="modeLiveBtn" class="modeBtn active">Live</button>
       <button id="modeRecordBtn" class="modeBtn">Record</button>
@@ -537,7 +544,20 @@ function switchMode(m){
   modeLiveBtn.classList.toggle("active", m === "live");
   modeRecordBtn.classList.toggle("active", m === "record");
   setActiveKeys([]);
+  if (m === "record" && detectMode === "chords") warmChordModel().catch(() => {}); // download + warm up in the background
 }
+function setDetectMode(dm){
+  if (dm === detectMode || analyzing || recording) return;
+  detectMode = dm;
+  detChordsBtn.classList.toggle("active", dm === "chords");
+  detSingleBtn.classList.toggle("active", dm === "single");
+  if (dm === "chords") warmChordModel().catch(() => {});
+  if (lastTake) loadTake(lastTake.samples, lastTake.sr); // re-analyze the current clip the new way
+}
+const detChordsBtn = document.getElementById("detChordsBtn");
+const detSingleBtn = document.getElementById("detSingleBtn");
+detChordsBtn.onclick = () => setDetectMode("chords");
+detSingleBtn.onclick = () => setDetectMode("single");
 modeLiveBtn.onclick = () => switchMode("live");
 modeRecordBtn.onclick = () => switchMode("record");
 
@@ -586,13 +606,28 @@ function processRecording(){
 }
 // Analyzes a clip (a mic recording or part of an imported file) and gets it ready to play.
 let analyzing = false;
+let lastTake = null;           // the last clip analyzed, so switching Chords / Single notes can re-analyze it
+let detectMode = "chords";     // "chords" (AI, several notes at once) | "single" (one note at a time)
 async function loadTake(samples, sr){
+  lastTake = { samples, sr };
   analyzing = true; setBusy(true);
   stopPlayback();
   noteSegments = []; segEls = new Map(); rollEl.innerHTML = "";
   recStatus.style.color = "var(--muted)"; recStatus.textContent = "Analyzing\u2026";
+  let note = "";
   try{
-    noteSegments = await analyzeOfflineAsync(samples, sr, pct => { recStatus.textContent = "Analyzing\u2026 " + pct + "%"; });
+    if (detectMode === "chords"){
+      try{
+        if (!bpModulePromise) recStatus.textContent = "Loading the chord detector (first time only)\u2026";
+        await loadChordModel();
+        noteSegments = await transcribeChords(samples, sr, pct => { recStatus.textContent = "Analyzing chords\u2026 " + pct + "%"; });
+      }catch(e){
+        note = " (Couldn't load the chord detector \u2014 used single-note detection. Check your connection.)";
+        noteSegments = await analyzeOfflineAsync(samples, sr, pct => { recStatus.textContent = "Analyzing\u2026 " + pct + "%"; });
+      }
+    } else {
+      noteSegments = await analyzeOfflineAsync(samples, sr, pct => { recStatus.textContent = "Analyzing\u2026 " + pct + "%"; });
+    }
   } finally { analyzing = false; setBusy(false); }
   noteSegments.sort((a,b) => a.start - b.start);
   player.clipPos = 0;
@@ -602,7 +637,7 @@ async function loadTake(samples, sr){
   currentPlaybackUrl = URL.createObjectURL(wavBlob);
   playbackAudio.src = currentPlaybackUrl;
   if (noteSegments.length){
-    recStatus.textContent = "Found " + noteSegments.length + " note" + (noteSegments.length===1?"":"s") + ".";
+    recStatus.textContent = "Found " + noteSegments.length + " note" + (noteSegments.length===1?"":"s") + "." + note;
     recStatus.style.color = "var(--muted)";
   } else {
     recStatus.textContent = "⚠ No notes detected in that recording — try playing closer to the mic, or louder.";
@@ -671,6 +706,98 @@ class PianoSynth{
     setTimeout(() => { try{ old.disconnect(); }catch(e){} }, 250);
     this.bus = this.ctx.createGain(); this.bus.connect(this.out);
   }
+}
+
+// ---------- Chord detection (polyphonic) ----------
+// Uses Basic Pitch, a small open-source neural network by Spotify (Apache-2.0) trained to hear several notes at
+// once. It runs entirely on the device (about 1 MB model + the TensorFlow.js runtime, downloaded once from the
+// jsDelivr CDN and then cached by the browser). Audio is converted to 22,050 Hz mono, which the model expects.
+// The thresholds and the two clean-up filters below were tuned on real-piano test audio (chords, melody with
+// accompaniment, fast pedalled arpeggios, repeated notes).
+const BP_BASE = "https://cdn.jsdelivr.net/npm/@spotify/basic-pitch@1.0.1/";
+const BP_SETTINGS = {
+  onset: 0.6, frame: 0.2, minLenFrames: 5,      // model thresholds
+  mergeGap: 0.12, mergeOnset: 0.5,               // re-join a held note the model split in two
+  ghostWin: 0.06, ghostRatio: 0.75, subRatio: 0.5 // drop quiet overtone "ghost" notes an octave away
+};
+const BP_FPS = 22050 / 256; // model output frames per second
+let bpModulePromise = null, bpInstance = null, bpWarm = null;
+function loadChordModel(){
+  if (!bpModulePromise){
+    bpModulePromise = import(BP_BASE + "+esm").then(mod => {
+      bpInstance = new mod.BasicPitch(BP_BASE + "model/model.json");
+      return bpInstance.model.then(() => mod); // wait until the network itself has downloaded
+    });
+    bpModulePromise.catch(() => { bpModulePromise = null; bpInstance = null; bpWarm = null; }); // allow a retry later
+  }
+  return bpModulePromise;
+}
+// The first run on a page is slow (the graphics chip compiles the model). Doing it once in the background on
+// silence makes the first real analysis fast.
+function warmChordModel(){
+  if (!bpWarm){
+    bpWarm = loadChordModel().then(() => bpInstance.evaluateModel(new Float32Array(22050), () => {}, () => {}));
+    bpWarm.catch(() => { bpWarm = null; });
+  }
+  return bpWarm;
+}
+function resampleTo22050(samples, sr){
+  if (sr === 22050) return Promise.resolve(samples);
+  const OC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  const len = Math.ceil(samples.length * 22050 / sr);
+  const oc = new OC(1, len, 22050);
+  const buf = oc.createBuffer(1, samples.length, sr);
+  buf.getChannelData(0).set(samples);
+  const src = oc.createBufferSource(); src.buffer = buf; src.connect(oc.destination); src.start(0);
+  return new Promise((res, rej) => {
+    oc.oncomplete = e => res(e.renderedBuffer.getChannelData(0).slice());
+    const p = oc.startRendering();
+    if (p && p.then) p.then(b => res(b.getChannelData(0).slice()), rej);
+  });
+}
+// Clean-up after the model: (1) a held note the model split in two, with no real new attack, is joined back;
+// (2) a quiet note exactly an octave / octave+fifth / two octaves above, or an octave below, a louder note that
+// starts at the same moment is an overtone, not a key that was pressed, so it's removed.
+function cleanChordNotes(notes, onsets, st){
+  const onsetAt = n => { const f = Math.round(n.start * BP_FPS), k = n.midi - 21; let mx = 0;
+    for (let i = Math.max(0, f - 2); i <= Math.min(onsets.length - 1, f + 2); i++) mx = Math.max(mx, onsets[i][k]); return mx; };
+  let ns = notes.map(n => Object.assign({}, n, { on: onsetAt(n) }));
+  ns.sort((a, b) => a.midi - b.midi || a.start - b.start);
+  const merged = [];
+  for (const n of ns){
+    const prev = merged.length && merged[merged.length - 1];
+    if (prev && prev.midi === n.midi && n.start - prev.end <= st.mergeGap && n.on < st.mergeOnset){
+      prev.end = Math.max(prev.end, n.end); prev.peak = Math.max(prev.peak, n.peak); continue;
+    }
+    merged.push(n);
+  }
+  ns = merged;
+  const drop = new Set();
+  ns.forEach((n, i) => ns.forEach((m, j) => {
+    if (i === j || drop.has(j) || Math.abs(n.start - m.start) > st.ghostWin) return;
+    const d = n.midi - m.midi;
+    if ((d === 12 || d === 19 || d === 24) && n.peak < m.peak * st.ghostRatio) drop.add(i);
+    if (d === -12 && n.peak < m.peak * st.subRatio) drop.add(i);
+  }));
+  return ns.filter((n, i) => !drop.has(i));
+}
+// Returns note segments in the shape the rest of the app uses: { midi, start, end, peak, vel }.
+async function transcribeChords(samples, sr, onProgress, settings){
+  const st = Object.assign({}, BP_SETTINGS, settings || {});
+  const mod = await loadChordModel();
+  const x = await resampleTo22050(samples, sr);
+  const frames = [], onsets = [], contours = [];
+  await bpInstance.evaluateModel(x, (f, o, c) => { frames.push(...f); onsets.push(...o); contours.push(...c); },
+    p => { if (onProgress) onProgress(Math.round(100 * Math.min(1, p))); });
+  const events = mod.noteFramesToTime(mod.outputToNotesPoly(frames, onsets, st.onset, st.frame, st.minLenFrames));
+  let segs = events
+    .filter(n => n.pitchMidi >= 21 && n.pitchMidi <= 108)
+    .map(n => ({ midi: n.pitchMidi, start: n.startTimeSeconds, end: n.startTimeSeconds + n.durationSeconds, peak: n.amplitude }));
+  segs = cleanChordNotes(segs, onsets, st);
+  const maxPeak = segs.reduce((m, sg) => Math.max(m, sg.peak), 0) || 1;
+  segs.forEach(sg => { delete sg.on; sg.vel = Math.min(1, Math.max(0.25, Math.sqrt(sg.peak / maxPeak))); });
+  segs.sort((a, b) => a.start - b.start || a.midi - b.midi);
+  return segs;
 }
 
 // ---------- Import an audio/video file and analyze part of it ----------
